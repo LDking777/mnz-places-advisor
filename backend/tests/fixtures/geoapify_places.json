@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Catedral Basílica de Manizales",
+        "categories": ["tourism.sights", "building.tourism"],
+        "address_line1": "Carrera 23 # 19-01",
+        "city": "Manizales"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-75.5167, 5.0675]
+      },
+      "place_id": "fixture-001"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mirador de Chipre",
+        "categories": ["tourism.sights", "tourism.attraction.viewpoint"],
+        "address_line1": "Calle 66 # 26-40",
+        "city": "Manizales"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-75.5234, 5.0568]
+      },
+      "place_id": "fixture-002"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Registro sin geometría",
+        "categories": ["tourism.sights"]
+      },
+      "geometry": null,
+      "place_id": "fixture-003"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "categories": ["tourism.sights"]
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-75.51, 5.06]
+      },
+      "place_id": "fixture-004"
+    }
+  ]
+}
