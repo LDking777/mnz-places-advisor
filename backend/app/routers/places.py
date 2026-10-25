@@ -6,9 +6,9 @@ from app.config import (
     MANIZALES_LON,
     MANIZALES_RADIUS_M,
 )
-from app.dependencies import get_geoapify_client, get_groq_client
-from app.geoapify import GeoapifyClient
+from app.dependencies import get_groq_client, get_place_source
 from app.groq import GroqClient
+from app.places_source import PlaceSource
 from app.schemas import RecommendationResponse
 from app.services import RecommendationService
 
@@ -26,7 +26,7 @@ async def get_recommendations(
         min_length=2,
         max_length=64,
         pattern=r"^[a-z0-9._]+$",
-        description="Categoría de Geoapify (por defecto tourism.sights).",
+        description="Categoría de lugares (por defecto tourism.sights).",
     ),
     latitude: float = Query(MANIZALES_LAT, ge=-90, le=90),
     longitude: float = Query(MANIZALES_LON, ge=-180, le=180),
@@ -37,10 +37,10 @@ async def get_recommendations(
         max_length=200,
         description="Preferencias del usuario para que Groq ordene y justifique las recomendaciones.",
     ),
-    client: GeoapifyClient = Depends(get_geoapify_client),
+    place_source: PlaceSource = Depends(get_place_source),
     groq_client: GroqClient = Depends(get_groq_client),
 ) -> RecommendationResponse:
-    service = RecommendationService(client, groq_client)
+    service = RecommendationService(place_source, groq_client)
     return await service.recommend(
         category=category,
         latitude=latitude,

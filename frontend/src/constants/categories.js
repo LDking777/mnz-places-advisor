@@ -1,6 +1,6 @@
 /**
  * Categorías disponibles para filtrar los lugares turísticos.
- * Cada `value` corresponde a un identificador Geoapify válido.
+ * Cada `value` corresponde a un identificador de categoría almacenado en la base de datos.
  */
 export const CATEGORIES = [
   { value: 'tourism.sights',      label: 'Sitios turísticos', icon: '🏛️' },

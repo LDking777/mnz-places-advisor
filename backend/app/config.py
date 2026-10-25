@@ -18,11 +18,7 @@ DEFAULT_CATEGORY = "tourism.sights"
 
 @dataclass(frozen=True)
 class Settings:
-    geoapify_api_key: str
-    geoapify_base_url: str = "https://api.geoapify.com"
-    request_timeout_seconds: float = 8.0
-    connect_timeout_seconds: float = 3.0
-    language: str = "es"
+    database_url: str
     frontend_origins: tuple[str, ...] = ("http://localhost:5173",)
     groq_api_key: str = ""
     groq_base_url: str = "https://api.groq.com/openai/v1"
@@ -43,11 +39,11 @@ def _read_positive_float(name: str, default: float) -> float:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    api_key = os.getenv("GEOAPIFY_API_KEY", "").strip()
-    if not api_key:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
         raise ConfigurationError(
-            "GEOAPIFY_API_KEY no está definida. Configúrela como variable de entorno "
-            "o en backend/.env (nunca la escriba en el código fuente)."
+            "DATABASE_URL no está definida. Configúrela como variable de entorno "
+            "o en backend/.env (nunca escriba credenciales en el código fuente)."
         )
 
     origins_raw = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173")
@@ -56,11 +52,7 @@ def get_settings() -> Settings:
         raise ConfigurationError("FRONTEND_ORIGINS debe contener al menos un origen.")
 
     return Settings(
-        geoapify_api_key=api_key,
-        geoapify_base_url=os.getenv("GEOAPIFY_BASE_URL", "https://api.geoapify.com").rstrip("/"),
-        request_timeout_seconds=_read_positive_float("GEOAPIFY_TIMEOUT_SECONDS", 8.0),
-        connect_timeout_seconds=_read_positive_float("GEOAPIFY_CONNECT_TIMEOUT_SECONDS", 3.0),
-        language=os.getenv("GEOAPIFY_LANGUAGE", "es"),
+        database_url=database_url,
         frontend_origins=origins,
         groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
         groq_base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),

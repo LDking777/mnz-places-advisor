@@ -1,14 +1,12 @@
 from app.enrichment import apply_groq_enrichment
 from app.exceptions import ServiceError
-from app.geoapify import GeoapifyClient
 from app.groq import GroqClient
-from app.schemas import PlaceDTO
-from app.transformers import feature_collection_to_places
+from app.places_source import PlaceSource
 
 
 class RecommendationService:
-    def __init__(self, client: GeoapifyClient, groq_client: GroqClient | None = None) -> None:
-        self._client = client
+    def __init__(self, place_source: PlaceSource, groq_client: GroqClient | None = None) -> None:
+        self._place_source = place_source
         self._groq = groq_client
 
     async def recommend(
@@ -21,14 +19,13 @@ class RecommendationService:
         limit: int,
         preferences: str | None = None,
     ):
-        payload = await self._client.search_places(
+        places = await self._place_source.search_places(
             categories=category,
             latitude=latitude,
             longitude=longitude,
             radius_m=radius_m,
             limit=limit,
         )
-        places = feature_collection_to_places(payload)
 
         if not self._groq or not self._groq.enabled or not places:
             return {
@@ -58,7 +55,7 @@ class RecommendationService:
                 "places": places,
                 "ai_enriched": False,
                 "ai_model": None,
-                "fallback_reason": "Groq no disponible, se muestra orden de Geoapify.",
+                "fallback_reason": "Groq no disponible, se muestra el orden original de la fuente de lugares.",
             }
         except Exception:
             return {
@@ -66,13 +63,13 @@ class RecommendationService:
                 "places": places,
                 "ai_enriched": False,
                 "ai_model": None,
-                "fallback_reason": "Groq no disponible, se muestra orden de Geoapify.",
+                "fallback_reason": "Groq no disponible, se muestra el orden original de la fuente de lugares.",
             }
 
 
 class ChatService:
-    def __init__(self, geo_client: GeoapifyClient, groq_client: GroqClient | None = None) -> None:
-        self._geo = geo_client
+    def __init__(self, place_source: PlaceSource, groq_client: GroqClient | None = None) -> None:
+        self._place_source = place_source
         self._groq = groq_client
 
     async def ask(
@@ -84,14 +81,13 @@ class ChatService:
         radius_m: int,
         limit: int,
     ):
-        payload = await self._geo.search_places(
+        places = await self._place_source.search_places(
             categories=category,
             latitude=latitude,
             longitude=longitude,
             radius_m=radius_m,
             limit=limit,
         )
-        places = feature_collection_to_places(payload)
         slim = [
             {"name": p.name, "category": p.category, "latitude": p.latitude, "longitude": p.longitude}
             for p in places
@@ -160,5 +156,5 @@ class ChatService:
                 "places_count": len(places),
                 "ai_enriched": False,
                 "ai_model": None,
-                "fallback_reason": "Error al conectar con Groq, se muestran sugerencias basadas en Geoapify.",
+                "fallback_reason": "Error al conectar con Groq, se muestran sugerencias basadas en la fuente de lugares.",
             }

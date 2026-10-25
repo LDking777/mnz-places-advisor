@@ -19,7 +19,7 @@ function reducer(state, action) {
 /**
  * Hook que encapsula la obtención de recomendaciones turísticas.
  *
- * @param {string} category — categoría Geoapify activa.
+ * @param {string} category — categoría activa.
  * @returns {{ data, status, error }}
  *   - data:   payload del backend (null mientras carga)
  *   - status: 'loading' | 'success' | 'error'

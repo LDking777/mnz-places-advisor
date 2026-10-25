@@ -1,30 +1,37 @@
-import logging
 from contextlib import asynccontextmanager
 
+import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.exceptions import ServiceError
-from app.geoapify import GeoapifyClient
 from app.groq import GroqClient
+from app.places_source import PostgresPlaceSource
 from app.routers.chat import router as chat_router
 from app.routers.places import router as places_router
-
-logger = logging.getLogger("manizales.api")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    app.state.geoapify = GeoapifyClient(settings)
+    dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    pool = await asyncpg.create_pool(
+        dsn=dsn,
+        min_size=1,
+        max_size=10,
+        command_timeout=5.0,
+    )
+    app.state.db_pool = pool
+    app.state.place_source = PostgresPlaceSource(pool)
     app.state.groq = GroqClient(settings)
+
     try:
         yield
     finally:
-        await app.state.geoapify.aclose()
         await app.state.groq.aclose()
+        await pool.close()
 
 
 def create_app() -> FastAPI:
@@ -32,8 +39,8 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Gestor de Recomendaciones Turísticas - Manizales",
-        description="API intermediaria que transforma Geoapify Places y puede enriquecer con Groq.",
-        version="1.2.0",
+        description="API de recomendaciones turísticas respaldada por PostgreSQL/PostGIS y enriquecida con Groq.",
+        version="1.3.0",
         lifespan=lifespan,
     )
     app.add_middleware(

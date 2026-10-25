@@ -1,14 +1,20 @@
-import json
 import os
-from pathlib import Path
 
+import asyncpg
 import pytest
 
-os.environ.setdefault("GEOAPIFY_API_KEY", "clave-solo-para-pruebas")
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test"
+os.environ.setdefault("GROQ_API_KEY", "")
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+class _FakePool:
+    async def close(self) -> None:
+        pass
 
 
-@pytest.fixture
-def geoapify_payload() -> dict:
-    return json.loads((FIXTURES_DIR / "geoapify_places.json").read_text(encoding="utf-8"))
+@pytest.fixture(autouse=True)
+def _fake_asyncpg_pool(monkeypatch):
+    async def fake_create_pool(*args, **kwargs):
+        return _FakePool()
+
+    monkeypatch.setattr(asyncpg, "create_pool", fake_create_pool)

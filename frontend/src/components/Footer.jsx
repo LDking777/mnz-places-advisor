@@ -9,7 +9,7 @@ export default function Footer() {
         Gestor de Recomendaciones Turísticas — Manizales, Caldas
       </p>
       <p className="mt-1 text-xs text-coffee-300">
-        Datos geográficos por Geoapify · Enriquecimiento con IA · DevOps Taller Final
+        Datos geográficos en PostgreSQL/PostGIS · Enriquecimiento con IA · DevOps Taller Final
       </p>
     </footer>
   )

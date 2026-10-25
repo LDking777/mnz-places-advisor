@@ -14,19 +14,19 @@ class ConfigurationError(ServiceError):
     default_message = "El servicio no tiene una configuración válida."
 
 
+class DatabaseUnavailableError(ServiceError):
+    status_code = 503
+    code = "database_unavailable"
+    default_message = "La base de datos de lugares no está disponible."
+
+
 class UpstreamTimeoutError(ServiceError):
     status_code = 504
     code = "upstream_timeout"
-    default_message = "El proveedor de lugares no respondió a tiempo."
+    default_message = "El servicio externo no respondió a tiempo."
 
 
 class UpstreamServiceError(ServiceError):
     status_code = 502
     code = "upstream_error"
-    default_message = "El proveedor de lugares devolvió una respuesta no válida."
-
-
-class InvalidUpstreamResponse(ServiceError):
-    status_code = 502
-    code = "invalid_upstream_payload"
-    default_message = "El proveedor de lugares devolvió un payload con un formato inesperado."
+    default_message = "El servicio externo devolvió una respuesta no válida."

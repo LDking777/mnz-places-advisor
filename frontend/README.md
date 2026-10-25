@@ -11,7 +11,7 @@ SPA en React + Vite que consume el backend FastAPI.
 | Producción | `.env.production` | `npm run build:prod` |
 
 Todas las variables expuestas al navegador deben usar el prefijo `VITE_`. No coloque secretos
-en estos archivos: la API key de Geoapify vive solo en el backend.
+en estos archivos: `DATABASE_URL` y `GROQ_API_KEY` viven solo en el backend.
 
 ## Scripts
 

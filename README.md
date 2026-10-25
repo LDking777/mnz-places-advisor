@@ -4,7 +4,7 @@ Monorepo con dos capas independientes:
 
 ```
 .
-├── backend/    FastAPI + httpx + python-dotenv (integración Geoapify)
+├── backend/    FastAPI + asyncpg + PostgreSQL/PostGIS + Groq
 └── frontend/   React + Vite (SPA)
 ```
 
@@ -22,7 +22,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt -r requirements-dev.txt
-Copy-Item .env.example .env   # complete GEOAPIFY_API_KEY
+Copy-Item .env.example .env
 cd ..
 
 # Frontend
@@ -31,12 +31,24 @@ cd frontend
 npm install
 ```
 
-## 2. Backend
+## 2. Base de datos
+
+Requisitos: PostgreSQL con la extensión PostGIS disponible.
+
+```powershell
+createdb manizales_tours
+psql -d manizales_tours -f backend/db/seed_places.sql
+```
+
+El esquema crea la tabla `places` con geometría `GEOGRAPHY(POINT, 4326)`,
+categorías jerárquicas e índices GIST/GIN para búsquedas espaciales.
+
+## 3. Backend
 
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-Copy-Item .env.example .env    # edite GEOAPIFY_API_KEY y GROQ_API_KEY
+Copy-Item .env.example .env    # edite DATABASE_URL y GROQ_API_KEY
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -44,20 +56,20 @@ Variables soportadas (solo por entorno / `.env`, nunca en código):
 
 | Variable | Obligatoria | Default |
 | --- | --- | --- |
-| `GEOAPIFY_API_KEY` | Sí | — |
-| `GROQ_API_KEY` | No | — (si falta, usa solo Geoapify con orden original) |
+| `DATABASE_URL` | Sí | — |
+| `GROQ_API_KEY` | No | — (si falta, responde sin enriquecimiento IA) |
 | `GROQ_MODEL` | No | `openai/gpt-oss-20b` |
 | `GROQ_BASE_URL` | No | `https://api.groq.com/openai/v1` |
 | `GROQ_TIMEOUT_SECONDS` | No | `12` |
-| `GEOAPIFY_BASE_URL` | No | `https://api.geoapify.com` |
-| `GEOAPIFY_TIMEOUT_SECONDS` | No | `8` |
-| `GEOAPIFY_CONNECT_TIMEOUT_SECONDS` | No | `3` |
-| `GEOAPIFY_LANGUAGE` | No | `es` |
 | `FRONTEND_ORIGINS` | No | `http://localhost:5173` (lista separada por comas) |
 
-### Endpoint
+La consulta de lugares usa `ST_DWithin` para el radio y el operador KNN
+`geom <-> point` para ordenar por distancia. El pool de `asyncpg` se crea al iniciar
+la aplicación y se cierra al apagarla.
 
-`GET /api/v1/places/recommendations`
+### Endpoints
+
+#### `GET /api/v1/places/recommendations`
 
 | Query | Default | Límites |
 | --- | --- | --- |
@@ -68,22 +80,18 @@ Variables soportadas (solo por entorno / `.env`, nunca en código):
 | `limit` | `20` | 1 a 50 |
 | `preferences` | — | texto para Groq (ordena y justifica) |
 
-La consulta a Geoapify usa `filter=circle:{lon},{lat},{radius}` y `categories={category}`.
-La API key viaja como `apiKey` en la petición saliente y nunca se registra en logs ni se
-devuelve al cliente.
-
 Respuesta (DTO simplificado, enriquecido opcionalmente con Groq):
 
 ```json
 {
   "city": "Manizales",
-  "count": 3,
+  "count": 1,
   "places": [
     {
-      "name": "Edificio Alejandro Gutiérrez",
+      "name": "Catedral Basílica de Manizales",
       "category": "tourism.sights",
-      "latitude": 5.06788343940026,
-      "longitude": -75.51691905581364,
+      "latitude": 5.0675,
+      "longitude": -75.5167,
       "reason": "Icono histórico y arquitectónico de Manizales..."
     }
   ],
@@ -93,23 +101,16 @@ Respuesta (DTO simplificado, enriquecido opcionalmente con Groq):
 }
 ```
 
-  "city": "Manizales",
-  "count": 2,
-  "places": [
-    {
-      "name": "Catedral Basílica de Manizales",
-      "category": "tourism.sights",
-      "latitude": 5.0675,
-      "longitude": -75.5167
-    }
-  ]
-}
-```
+#### `POST /api/v1/chat/assistant`
 
-Errores: `502` payload/estado inválido del proveedor, `504` timeout, `503` configuración
-faltante, `422` parámetros inválidos.
+Recibe `question`, `category`, `latitude`, `longitude`, `radius_m`, `limit` y
+`preferences`. Devuelve `answer`, `suggested_places`, `places_count`, `ai_enriched`,
+`ai_model` y `fallback_reason`.
 
-### Pruebas (deterministas, sin red)
+Errores: `503` base de datos/configuración no disponible, `504` timeout del servicio
+externo, `502` respuesta inválida de Groq, `422` parámetros inválidos.
+
+### Pruebas (deterministas, sin red ni base de datos real)
 
 ```powershell
 cd backend
@@ -117,10 +118,10 @@ cd backend
 pytest
 ```
 
-`unittest.mock` reemplaza `httpx.AsyncClient.get` y la dependencia del cliente en los tests de
-API. Ninguna prueba consume la cuota de Geoapify ni requiere conectividad.
+Las pruebas usan un fake de `PlaceSource` y reemplazan el pool de `asyncpg`, por lo que
+no requieren PostgreSQL ni consumen servicios externos.
 
-## 3. Frontend
+## 4. Frontend
 
 ```powershell
 cd frontend
@@ -131,18 +132,17 @@ npm run build:prod   # PROD -> .env.production
 ```
 
 `VITE_API_BASE_URL` define el backend por entorno. Solo variables `VITE_*` llegan al
-navegador; jamás incluya la API key allí.
+navegador; jamás incluya credenciales allí.
 
-## 4. Seguridad
+## 5. Seguridad
 
 - `.env` está en `.gitignore`; solo se versiona `.env.example` sin valores reales.
-- Rotar `GEOAPIFY_API_KEY` ante cualquier sospecha de exposición.
-- En despliegue, inyectar la clave con el gestor de secretos del proveedor cloud (SSM,
-  Secrets Manager, Vault) en lugar de un archivo `.env`.
+- Inyectar `DATABASE_URL` y `GROQ_API_KEY` con el gestor de secretos del proveedor cloud
+  (SSM, Secrets Manager, Vault) en lugar de un archivo `.env` en producción.
 - CORS restringido a los orígenes definidos en `FRONTEND_ORIGINS`.
-- Timeouts explícitos y mapeo de errores del proveedor a códigos HTTP propios.
+- Timeouts explícitos y mapeo de errores a códigos HTTP propios.
 
-## 5. Próximos pasos (CI/CD)
+## 6. Próximos pasos (CI/CD)
 
 ```yaml
 # ejemplo de pipeline

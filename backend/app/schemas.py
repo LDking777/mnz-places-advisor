@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class PlaceDTO(BaseModel):
     name: str = Field(..., description="Nombre del lugar turístico")
-    category: str = Field(..., description="Categoría principal reportada por Geoapify")
+    category: str = Field(..., description="Categoría principal del lugar")
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     reason: str | None = Field(

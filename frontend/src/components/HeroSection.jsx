@@ -29,7 +29,7 @@ export default function HeroSection({ category, onCategoryChange }) {
 
         {/* Descripción */}
         <p className="mt-4 max-w-xl text-base leading-relaxed text-emerald-100/80 sm:text-lg">
-          Recomendaciones turísticas curadas desde Geoapify y enriquecidas con IA
+          Recomendaciones turísticas consultadas en PostgreSQL/PostGIS y enriquecidas con IA
           para crear planes a medida, con grounding exclusivo en lugares reales
           del centro de Manizales.
         </p>

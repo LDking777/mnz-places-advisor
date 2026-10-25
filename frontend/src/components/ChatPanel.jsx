@@ -31,7 +31,7 @@ export default function ChatPanel({ question, setQuestion, response, loading, er
         </div>
         <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-soft" aria-hidden="true" />
-          Grounding estricto con Geoapify
+          Grounding estricto con PostGIS
         </span>
       </header>
 
