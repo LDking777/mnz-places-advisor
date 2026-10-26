@@ -1,0 +1,7 @@
+# Dependencias que se empaquetan para AWS Lambda (sin uvicorn: Lambda no lo necesita).
+fastapi>=0.115,<1.0
+httpx>=0.27,<1.0
+python-dotenv>=1.0,<2.0
+pydantic>=2.7,<3.0
+mangum>=0.19,<1.0
+asyncpg>=0.29,<1.0
