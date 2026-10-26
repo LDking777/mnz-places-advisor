@@ -1,0 +1,137 @@
+# Pipeline CI/CD de mnz-places-advisor
+#   develop -> ambiente DEV  (automático)
+#   qa      -> ambiente QA   (automático)
+#   main    -> ambiente PDN  (requiere aprobación manual en el environment "production")
+name: CI-CD
+
+on:
+  push:
+    branches: [develop, qa, main]
+  pull_request:
+    branches: [qa, main]
+  workflow_dispatch:
+
+# Evita dos despliegues simultáneos al mismo ambiente
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  test-backend:
+    name: Pruebas backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  test-frontend:
+    name: Lint, pruebas y build frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_API_BASE_URL: https://build-check.invalid
+
+  deploy:
+    name: Desplegar a ${{ github.ref_name == 'main' && 'PDN' || github.ref_name == 'qa' && 'QA' || 'DEV' }}
+    needs: [test-backend, test-frontend]
+    # Solo se despliega con push (merge) a una de las tres ramas, nunca desde un PR
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'qa' && 'qa' || 'dev' }}
+      url: ${{ vars.APP_URL }}
+    permissions:
+      id-token: write   # necesario para autenticarse en AWS con OIDC (sin claves guardadas)
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Empaquetar backend para Lambda
+        working-directory: backend
+        run: |
+          pip install -r requirements-lambda.txt --target package \
+            --platform manylinux2014_x86_64 --implementation cp \
+            --python-version 3.12 --only-binary=:all:
+          cp -r app package/
+          find package -name '__pycache__' -prune -exec rm -rf {} +
+          cd package && zip -qr ../lambda.zip .
+          ls -lh ../lambda.zip
+
+      - name: Autenticarse en AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Desplegar backend (Lambda ${{ vars.LAMBDA_FUNCTION_NAME }})
+        working-directory: backend
+        run: |
+          aws lambda update-function-code \
+            --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}" \
+            --zip-file fileb://lambda.zip --publish \
+            --query '{version: Version, sha256: CodeSha256}' --output table
+          aws lambda wait function-updated --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
+
+      - name: Desplegar frontend (Amplify, rama ${{ github.ref_name }})
+        run: |
+          JOB_ID=$(aws amplify start-job \
+            --app-id "${{ vars.AMPLIFY_APP_ID }}" \
+            --branch-name "${{ github.ref_name }}" \
+            --job-type RELEASE \
+            --job-reason "GitHub Actions ${{ github.sha }}" \
+            --query 'jobSummary.jobId' --output text)
+          echo "Job de Amplify: $JOB_ID"
+          for i in $(seq 1 60); do
+            STATUS=$(aws amplify get-job --app-id "${{ vars.AMPLIFY_APP_ID }}" \
+              --branch-name "${{ github.ref_name }}" --job-id "$JOB_ID" \
+              --query 'job.summary.status' --output text)
+            echo "Estado: $STATUS"
+            case "$STATUS" in
+              SUCCEED) exit 0 ;;
+              FAILED|CANCELLED) echo "El build de Amplify falló"; exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo "Tiempo de espera agotado"; exit 1
+
+      - name: Prueba de humo
+        run: ./scripts/smoke-test.sh "${{ vars.APP_URL }}" "${{ vars.API_URL }}"
+
+      - name: Registro de versión
+        run: |
+          {
+            echo "## Despliegue a ${{ github.ref_name }}"
+            echo "| Dato | Valor |"
+            echo "| --- | --- |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Autor | ${{ github.actor }} |"
+            echo "| Frontend | ${{ vars.APP_URL }} |"
+            echo "| API | ${{ vars.API_URL }} |"
+            echo "| Fecha (UTC) | $(date -u +'%Y-%m-%d %H:%M') |"
+          } >> "$GITHUB_STEP_SUMMARY"
