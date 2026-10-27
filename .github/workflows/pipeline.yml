@@ -121,7 +121,7 @@ jobs:
           echo "Tiempo de espera agotado"; exit 1
 
       - name: Prueba de humo
-        run: ./scripts/smoke-test.sh "${{ vars.APP_URL }}" "${{ vars.API_URL }}"
+        run: bash ./scripts/smoke-test.sh "${{ vars.APP_URL }}" "${{ vars.API_URL }}"
 
       - name: Registro de versión
         run: |
